@@ -1,0 +1,11 @@
+# Python Environment
+venv/
+__pycache__/
+*.pyc
+
+# OS/IDE Files
+.DS_Store
+.vscode/
+
+# Streamlit Cache Files
+.streamlit/

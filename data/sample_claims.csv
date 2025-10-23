@@ -1,0 +1,5 @@
+ID,Claim_Text,Claim_URL,Image_Mock,Ground_Truth
+1,"SHOCKING! New evidence proves the moon landing was faked! Must see video now!",http://conspiracycentral.org/faked-moon,old_news_fire_photo.jpg,FALSE
+2,"The Federal Reserve announced a quarter-point rate cut following inflation reports.",https://www.reuters.com/rates-report,official_video_clean_shot.mp4,TRUE
+3,"Massive floods hit the coastline today, causing widespread destruction!",http://low-info-blog.com/floods-today,old_news_fire_photo.jpg,FALSE
+4,"The local government released budget adjustments for the next fiscal quarter.",https://www.nytimes.com/local-budget,recent_weather_report.png,TRUE
