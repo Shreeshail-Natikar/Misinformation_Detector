@@ -1,12 +1,14 @@
 # requirements.txt
 # Dependencies for the Multi-modal AI Misinformation Detector
 
-# Core analysis tools (NLP/CV mock libraries)
-# We assume these are placeholders for real ML libraries like:
-# transformers
-# torch
-# scikit-learn
-# opencv-python
+# Core ML libraries
+torch
+transformers
+vaderSentiment
+Pillow
 
-# Dependency for running the interactive web application
+# Optional dependencies for enhanced functionality
+pysafebrowsing
+
+# Web application
 streamlit

@@ -9,10 +9,11 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
 # 1. Import all core analysis modules
 try:
-    from nlp_module.tone_analyzer import TextAnalyzer
+    # Ensure these imports use 'src.' prefix if you are still getting Pylance warnings
+    from nlp_module.tone_analyzer import TextAnalyzer 
     from nlp_module.source_checker import SourceChecker
     from cv_module.reverse_search import ReverseSearcher
-    from cv_module.deepfake_detector import DeepfakeDetector  # <-- NEW
+    from cv_module.deepfake_detector import DeepfakeDetector
     from fusion_module.fusion_logic import FusionEngine
 except ImportError as e:
     print(f"ERROR: Could not import necessary modules. Check your file structure and run 'pip install -r requirements.txt'.")
@@ -21,17 +22,16 @@ except ImportError as e:
 
 
 class MisinformationPlatform:
-    """
-    The central platform that orchestrates the multi-modal analysis pipeline.
-    """
+    # ... (init method remains unchanged)
     def __init__(self):
         print("--- Initializing Multi-modal AI Platform ---")
         self.text_analyzer = TextAnalyzer()
         self.source_checker = SourceChecker()
         self.reverse_searcher = ReverseSearcher()
-        self.deepfake_detector = DeepfakeDetector() # <-- NEW
+        self.deepfake_detector = DeepfakeDetector()
         self.fusion_engine = FusionEngine()
         print("All core analysis engines loaded and ready.")
+    # ... (end of init method)
 
     def run_analysis(self, claim_url: str, claim_text: str, image_file_mock: str) -> Dict[str, Any]:
         """
@@ -41,22 +41,20 @@ class MisinformationPlatform:
         # --- PHASE 1: Text Analysis ---
         print("\n[PHASE 1] Starting Text (NLP) Analysis...")
         
-        # Tone/Sensationalism Check
+        # Tone/Sensationalism Check (Assumes TextAnalyzer returns a dict with 'score' key)
         tone_analysis = self.text_analyzer.analyze_tone(claim_text)
-        # The Tone Analyzer returns a score (0 to 1) for sensationalism. 
-        # We invert this for fusion: (1 - score) = Credibility Score.
         tone_credibility_score = 1.0 - tone_analysis['score'] 
         
-        # Source Credibility Check
-        source_analysis = self.source_checker.get_credibility_score(claim_url)
-        
+        # Source Credibility Check (Returns a TUPLE: (score, finding_string))
+        source_analysis = self.source_checker.get_credibility_score(claim_url) # source_analysis is a tuple
+
         # --- PHASE 2: Computer Vision (CV) Analysis ---
         print("[PHASE 2] Starting Computer Vision (CV) Analysis...")
         
-        # Contextual Verification (Reverse Search)
+        # Contextual Verification (Assumes ReverseSearcher returns a dict with 'score' key)
         image_context_analysis = self.reverse_searcher.verify_context(image_file_mock, claim_text)
 
-        # Deepfake/Manipulation Check
+        # Deepfake/Manipulation Check (Assumes DeepfakeDetector returns a dict with 'score' key)
         deepfake_analysis = self.deepfake_detector.analyze_manipulation(image_file_mock)
         
         # --- PHASE 3: Multi-modal Fusion ---
@@ -64,16 +62,14 @@ class MisinformationPlatform:
         
         # Collect all credibility scores (1.0 = High Credibility/Authenticity)
         raw_scores = {
-            "source_credibility": source_analysis['score'],
+            # FIX 1: Use index [0] to get the score from the source_analysis tuple
+            "source_credibility": source_analysis[0],
             "image_context": image_context_analysis['score'],
-            "text_tone": tone_credibility_score,  # Uses the inverted score (High Credibility = Low Sensationalism)
-            # NOTE: Deepfake score needs to be integrated into the FusionEngine's weights to be fully used.
-            # For this demo, we'll include it in the report, but use the original 3-score weights.
+            "text_tone": tone_credibility_score,
             "deepfake_authenticity": deepfake_analysis['score'] 
         }
         
         # **IMPORTANT:** If you want to include deepfake, you must update the WEIGHTS in fusion_logic.py
-        # For now, we use the original 3 scores for the final Fusion Score calculation.
         fusion_input_scores = {k: v for k, v in raw_scores.items() if k in self.fusion_engine.WEIGHTS}
         final_report = self.fusion_engine.calculate_final_score(fusion_input_scores)
         
@@ -81,13 +77,14 @@ class MisinformationPlatform:
         full_report = {
             "Input_Claim": claim_text,
             "Input_Source": claim_url,
-            "--- FINAL VERDICT (Based on Source, Context, Tone) ---": final_report,
+            "--- FINAL VERDICT ---": final_report,
             "Raw_Scores": raw_scores,
             "Detailed_Findings": {
-                "Source_Check": source_analysis['reason'],
+                # FIX 2: Use index [1] to get the finding string from the source_analysis tuple
+                "Source_Check": source_analysis[1],
                 "Tone_Check": tone_analysis['reason'],
                 "Image_Context_Check": image_context_analysis['reason'],
-                "Deepfake_Check": deepfake_analysis['verdict'] # New detail
+                "Deepfake_Check": deepfake_analysis['verdict']
             }
         }
         
@@ -96,6 +93,7 @@ class MisinformationPlatform:
 
 # --- Example Execution (The Demonstration) ---
 if __name__ == "__main__":
+    # ... (The rest of the __main__ block remains unchanged)
     platform = MisinformationPlatform()
 
     # 1. SCENARIO 1: High Probability of MISINFORMATION (All red flags)
@@ -110,8 +108,8 @@ if __name__ == "__main__":
     
     # Print the final summary
     print("\n--- FINAL MISINFORMATION REPORT ---")
-    print(f"Verdict: {report_1['--- FINAL VERDICT (Based on Source, Context, Tone) ---']['verdict']}")
-    print(f"Fusion Score: {report_1['--- FINAL VERDICT (Based on Source, Context, Tone) ---']['score']:.4f}")
+    print(f"Verdict: {report_1['--- FINAL VERDICT ---']['verdict']}")
+    print(f"Fusion Score: {report_1['--- FINAL VERDICT ---']['score']:.4f}")
     print("\n--- Detailed Findings ---")
     for key, value in report_1['Detailed_Findings'].items():
         print(f"{key}: {value}")
@@ -129,8 +127,8 @@ if __name__ == "__main__":
 
     # Print the final summary
     print("\n--- FINAL MISINFORMATION REPORT ---")
-    print(f"Verdict: {report_2['--- FINAL VERDICT (Based on Source, Context, Tone) ---']['verdict']}")
-    print(f"Fusion Score: {report_2['--- FINAL VERDICT (Based on Source, Context, Tone) ---']['score']:.4f}")
+    print(f"Verdict: {report_2['--- FINAL VERDICT ---']['verdict']}")
+    print(f"Fusion Score: {report_2['--- FINAL VERDICT ---']['score']:.4f}")
     print("\n--- Detailed Findings ---")
     for key, value in report_2['Detailed_Findings'].items():
         print(f"{key}: {value}")

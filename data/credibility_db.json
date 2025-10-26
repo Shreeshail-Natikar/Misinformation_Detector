@@ -1,0 +1,14 @@
+{
+    "foxnews.com": {
+        "score": 0.6,
+        "reason": "Known to publish biased/opinion content."
+    },
+    "apnews.com": {
+        "score": 0.9,
+        "reason": "Generally high standard for fact-checking."
+    },
+    "infowars.com": {
+        "score": 0.1,
+        "reason": "Identified source of widespread disinformation."
+    }
+}

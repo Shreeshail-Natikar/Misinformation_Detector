@@ -1,113 +1,131 @@
-import os
-import random
+# src/cv_module/reverse_search.py
+
 from typing import Dict, Any
+import os
+from PIL import Image
+
+# Import the necessary Hugging Face components
+try:
+    from transformers import BlipProcessor, BlipForQuestionAnswering
+    import torch
+    
+    # We will set the target device inside the __init__ for more control
+    
+except ImportError:
+    print("CV: BLIP model dependencies (transformers/torch) are missing. Using mock scores.")
+    BlipProcessor = None
 
 class ReverseSearcher:
     """
-    Simulates a Reverse Image Search to perform contextual verification.
-    This component checks if an image is being used out of context 
-    by comparing its alleged context (input_claim) with known historical 
-    contexts (simulated_search_results).
+    Analyzes the context of an uploaded image/video (simulated) by generating a caption
+    using the BLIP VQA model and checking its relevance to the text claim.
     """
-    
-    # 🎯 Contextual Mismatch Keywords
-    # If the simulated search finds dates/locations that contradict the claim, 
-    # the score will be lower.
-    CONTEXTUAL_KEYWORDS = {
-        'flood_2010': '2010',
-        '2024_election': '2020',
-        'new_york_fire': 'chicago',
-        'current_protest': '2022_archive'
-    }
-
     def __init__(self):
-        print("Reverse Search module initialized for contextual verification.")
+        self.processor = None
+        self.model = None
+        
+        if BlipProcessor:
+            try:
+                # FIX: Explicitly set device to CPU for stability during initialization
+                DEVICE = "cpu"
+                model_name = "Salesforce/blip-vqa-base"
+                self.processor = BlipProcessor.from_pretrained(model_name)
+                # FIX: Load the model and ensure it's on the chosen device
+                self.model = BlipForQuestionAnswering.from_pretrained(model_name).to(DEVICE)
+                print(f"CV: BLIP VQA model successfully loaded on {DEVICE}.")
+            except Exception as e:
+                # This error catches download or memory issues
+                print(f"CV: ERROR loading BLIP model: {e}. Falling back to mock scores.")
 
-    def simulate_search(self, image_path: str) -> Dict[str, Any]:
+    def _calculate_mismatch_score(self, claim_text: str, ai_caption: str) -> float:
         """
-        Simulates the results of a reverse image search based on the input image.
-        In a real project, this would involve API calls or perceptual hashing.
+        Calculates a simple score based on the perceived mismatch between the claim and the caption.
+        In a real hackathon setting, this would be a full semantic similarity check.
         """
+        # A very basic check: does the claim contain strong positive/negative words 
+        # that are NOT present in the neutral AI caption?
+        claim_words = set(claim_text.lower().split())
+        caption_words = set(ai_caption.lower().split())
         
-        # We use a simple hash of the file name (or just random choice) to simulate results
-        # A more complex name simulates an older, oft-used image.
-        is_reused = "old_news" in image_path.lower() or random.random() < 0.6
+        # Keywords suggesting sensationalism/emotion often used in misinformation
+        sensational_keywords = {"shocking", "cover-up", "secret", "exposed", "truth", "must"}
         
-        results = {
-            "image_id": os.path.basename(image_path),
-            "is_reused_image": is_reused,
-            "found_contexts": []
-        }
+        # Find sensational words in the claim that are NOT in the AI's neutral description
+        unsupported_sensationalism = claim_words.intersection(sensational_keywords) - caption_words
         
-        if is_reused:
-            # Simulate finding the image in old or incorrect contexts
-            results["found_contexts"] = [
-                {"date": "June 2018", "source": "Old Newspaper Archive"},
-                {"date": "May 2021", "source": "Foreign News Blog"},
-                {"date": "May 2024", "source": "Current Claim Source"} # Included for comparison
-            ]
-        
-        return results
+        # The logic: High unsupported sensationalism -> Low score (High mismatch)
+        if len(unsupported_sensationalism) >= 2:
+            return 0.2  # High Mismatch/Low Credibility
+        elif len(unsupported_sensationalism) == 1:
+            return 0.5  # Moderate Mismatch
+        else:
+            return 0.85 # Low Mismatch/High Credibility
 
-    def verify_context(self, image_path: str, input_claim: str) -> Dict[str, Any]:
+    def verify_context(self, media_key: str, claim_text: str) -> Dict[str, Any]:
         """
-        Compares the simulated search results with the current claim context.
+        Analyzes the image context.
         """
-        search_results = self.simulate_search(image_path)
+        score = 0.5
+        reason = "Media context analysis performed."
+        ai_caption = "N/A"
         
-        final_score = 1.0  # Start high, lower if contradictions found
-        reason = "Image context appears consistent with the claim."
+        # Define a mock path where the app expects to find placeholder images
+        mock_image_path = os.path.join(os.path.dirname(__file__), '../../data/images', media_key)
 
-        if search_results["is_reused_image"]:
-            # Image is known to be reused, now check for contextual mismatch
-            final_score -= 0.3 # Initial penalty for being a reused image
-            
-            # Check for strong contextual mismatch signals (e.g., conflicting dates/locations)
-            
-            # Simple simulation: If the image is reused and the claim mentions '2024', 
-            # but the search finds contexts from '2018', there's a problem.
-            
-            if '2024' in input_claim and any('2018' in ctx['date'] for ctx in search_results["found_contexts"]):
-                final_score -= 0.5
-                reason = "Image is frequently reused and context history (2018) **strongly contradicts** the current claim (2024)."
-            
-            elif len(search_results["found_contexts"]) > 2:
-                final_score -= 0.1
-                reason = "Image is often reused. Contextual check suggests caution, but no direct contradiction found."
+        # Re-check device here for the execution step (must use the device set in __init__)
+        device_used = self.model.device if self.model else "cpu"
+
+        if self.processor and self.model:
+            try:
+                if not os.path.exists(mock_image_path):
+                    reason = f"Image file '{media_key}' not found at mock path. Cannot run VQA. Using default score."
+                    return {"score": score, "reason": reason}
+                    
+                raw_image = Image.open(mock_image_path).convert('RGB')
+                
+                # Use BLIP to generate a descriptive caption
+                question = "describe the main content of the image in a concise sentence"
+                
+                # Ensure inputs tensor is moved to the correct device
+                inputs = self.processor(raw_image, question, return_tensors="pt").to(device_used)
+                out = self.model.generate(**inputs, max_length=20) # Max 20 words for conciseness
+                ai_caption = self.processor.decode(out[0], skip_special_tokens=True)
+                
+                # Calculate the score based on mismatch
+                score = self._calculate_mismatch_score(claim_text, ai_caption)
+
+                if score < 0.5:
+                    reason = f"VQA found high content mismatch. AI Caption: '{ai_caption}'."
+                elif score < 0.8:
+                    reason = f"VQA found moderate mismatch. AI Caption: '{ai_caption}'."
+                else:
+                    reason = f"VQA content appears relevant. AI Caption: '{ai_caption}'."
+                    
+            except Exception as e:
+                # Catch any runtime issues during model execution
+                reason = f"VQA Model Runtime Error: {e}. Using default score."
         
-        # Ensure the score remains between 0.0 and 1.0
-        final_score = max(0.0, min(1.0, final_score))
+        else:
+            reason = f"VQA Model not loaded or dependencies missing. Using mock score."
 
         return {
-            "score": final_score,
-            "is_reused": search_results["is_reused_image"],
-            "reason": reason,
-            "details": search_results["found_contexts"]
+            "score": score,
+            "reason": reason
         }
 
-
-# --- Example Usage ---
+# Example execution block (optional for testing)
 if __name__ == "__main__":
-    searcher = ReverseSearcher()
-
-    # Example 1: Old image used for a new, misleading claim
-    image_1 = "old_news_fire_photo.jpg"
-    claim_1 = "BREAKING: Massive fire sweeps through city center today, 2024!"
-
-    # Example 2: New image, not widely reused (Simulated legitimate context)
-    image_2 = "recent_weather_report.png"
-    claim_2 = "Heavy rainfall predicted for tomorrow morning."
-
-    print("\n--- Analyzing Image 1 (Reused/Out of Context) ---")
-    analysis_1 = searcher.verify_context(image_1, claim_1)
-    print(f"Image File: {image_1}")
-    print(f"Claim: {claim_1[:40]}...")
-    print(f"Contextual Score: {analysis_1['score']:.2f}")
-    print(f"Verdict: {analysis_1['reason']}")
-
-    print("\n--- Analyzing Image 2 (New/Consistent Context) ---")
-    analysis_2 = searcher.verify_context(image_2, claim_2)
-    print(f"Image File: {image_2}")
-    print(f"Claim: {claim_2}")
-    print(f"Contextual Score: {analysis_2['score']:.2f}")
-    print(f"Verdict: {analysis_2['reason']}")
+    # Create a mock image file for testing the logic
+    # You MUST have a dummy file at this path for the test below to work:
+    # data/images/test_image.jpg (or similar)
+    if not os.path.exists('../../data/images/test_image.jpg'):
+        print("\nNOTE: Please create a dummy image at 'data/images/test_image.jpg' to run the test.")
+    
+    analyzer = ReverseSearcher()
+    
+    # SCENARIO 1: High Mismatch (Image of a cat, but claim is about a government secret)
+    claim_1 = "SHOCKING NEW VIDEO shows government cover-up of alien contact! MUST WATCH!"
+    report_1 = analyzer.verify_context("test_image.jpg", claim_1)
+    print(f"\nClaim 1: '{claim_1}'")
+    print(f"Context Score: {report_1['score']:.4f}")
+    print(f"Finding: {report_1['reason']}")
